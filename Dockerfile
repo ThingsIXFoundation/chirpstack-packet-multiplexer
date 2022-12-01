@@ -1,22 +1,25 @@
-FROM golang:1.13-alpine AS development
+FROM --platform=$BUILDPLATFORM golang:1.19.3-alpine as build
 
-ENV PROJECT_PATH=/chirpstack-packet-multiplexer
-ENV PATH=$PATH:$PROJECT_PATH/build
-ENV CGO_ENABLED=0
-ENV GO_EXTRA_BUILD_ARGS="-a -installsuffix cgo"
+RUN apk add --update-cache tzdata && rm -rf /var/cache/apk/*
 
-RUN apk add --no-cache tzdata make git bash
+WORKDIR /build
 
-RUN mkdir -p $PROJECT_PATH
-COPY . $PROJECT_PATH
-WORKDIR $PROJECT_PATH
+COPY go.mod .
+COPY go.sum .
 
-RUN make dev-requirements
-RUN make
+RUN go mod download
+RUN go mod verify
 
-FROM alpine:latest AS production
+ARG GIT_VERSION=develop
 
-WORKDIR /root/
-RUN apk --no-cache add tzdata
-COPY --from=development /chirpstack-packet-multiplexer/build .
+COPY . .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "-s -w -X main.version=$(GIT_VERSION)" -o /chirpstack-packet-multiplexer cmd/chirpstack-packet-multiplexer/main.go
+
+# copy forwarder and certs to base image.
+FROM scratch 
+
+LABEL authors="ThingsIX Foundation"
+
+COPY --from=build /chirpstack-packet-multiplexer  .
+
 ENTRYPOINT ["./chirpstack-packet-multiplexer"]
