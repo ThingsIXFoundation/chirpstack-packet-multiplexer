@@ -11,6 +11,8 @@ RUN go mod download
 RUN go mod verify
 
 ARG GIT_VERSION=develop
+ARG TARGETOS
+ARG TARGETARCH
 
 COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -ldflags "-s -w -X main.version=$(GIT_VERSION)" -o /chirpstack-packet-multiplexer cmd/chirpstack-packet-multiplexer/main.go
